@@ -1,24 +1,95 @@
 #undef __KERNEL__
 #define __KERNEL__
- 
+
 #undef MODULE
 #define MODULE
- 
-// Linux Kernel/LKM headers: module.h is needed by all modules and kernel.h is needed for KERN_INFO.
-#include <linux/module.h>    // included for all kernel modules
-#include <linux/kernel.h>    // included for KERN_INFO
-#include <linux/init.h>        // included for __init and __exit macros
- 
-static int __init hello_init(void)
+
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/proc_fs.h>
+#include <asm/uaccess.h>
+
+static int num1;
+static int num2;
+static int result;
+static char operation;
+
+static struct proc_dir_entry *proc_file_1;
+static struct proc_dir_entry *proc_file_2;
+static struct proc_dir_entry *proc_result_file;
+static struct proc_dir_entry *proc_operation_file;
+
+int proc_file1_write (struct file *file, const char __user *buffer, unsigned long count, void *data)
 {
-    printk(KERN_INFO "Hello world!\n");
-    return 0;    // Non-zero return means that the module couldn't be loaded.
+    char *page;
+    page = (char *) vmalloc(count);
+    if (!page)
+       return -ENOMEM;
+
+    if (copy_from_user(page, buffer, count)) {
+       vfree(page);
+       return -EFAULT;
+    }
+    sscanf(page,"%d",&num1);
+    return count;
 }
- 
-static void __exit hello_cleanup(void)
+
+int proc_file2_write (struct file *file, const char __user *buffer, unsigned long count, void *data)
 {
-    printk(KERN_INFO "Cleaning up module.\n");
+    char *page;
+    page = (char *) vmalloc(count);
+    if (!page)
+       return -ENOMEM;   
+
+    if (copy_from_user(page, buffer, count)) {
+       vfree(page);
+       return -EFAULT;
+    }
+    sscanf(page,"%d",&num2);
+    return count;
 }
- 
-module_init(hello_init);
-module_exit(hello_cleanup);
+
+int proc_file_operation_write (struct file *file, const char __user *buffer, unsigned long count, void *data)
+{
+    sscanf(buffer, "%c", &operation);
+    return count;
+}
+
+int proc_file_result_read (char *buffer, char **buffer_location, off_t offset, int buffer_length, int *eof, void *data)
+{
+    int len;
+    if (operation == '+')
+	len = sprintf(buffer, "%d", num1 + num2);
+    if (operation == '-')
+	len = sprintf(buffer, "%d", num1 - num2);
+    if (operation == '*')
+	len = sprintf(buffer, "%d", num1 * num2);
+    if (operation == '/')
+	len = sprintf(buffer, "%d", num1 / num2);
+    return len;
+}
+
+int init_module()
+{
+    proc_file_1 = create_proc_entry("proc_num1", 0666, NULL);
+    proc_file_2 = create_proc_entry("proc_num2", 0666, NULL);
+    proc_result_file = create_proc_entry("proc_result", 0666, NULL);
+    proc_operation_file = create_proc_entry("proc_operation", 0666, NULL);
+    if (proc_file_1 == NULL || proc_file_2 == NULL || proc_result_file == NULL || proc_operation_file == NULL)
+	return -ENOMEM;
+    proc_file_1->write_proc = proc_file1_write;
+    proc_file_2->write_proc = proc_file2_write;
+    proc_result_file->read_proc = proc_file_result_read;
+    proc_operation_file->write_proc = proc_file_operation_write;
+    return 0;
+}
+
+void cleanup_module()
+{
+    remove_proc_entry("proc_num1", NULL);
+    remove_proc_entry("proc_num2", NULL);
+    remove_proc_entry("proc_result", NULL);
+    remove_proc_entry("proc_operation", NULL);
+}
+
