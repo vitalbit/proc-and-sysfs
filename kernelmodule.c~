@@ -89,6 +89,39 @@ static ssize_t sysfs_operation_store(struct kobject *kobj, struct kobj_attribute
     return count;
 }
 
+static ssize_t sysfs_result_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    int len;
+    if (operation == '+')
+	len = sprintf(buffer, "%d\n", num1 + num2);
+    if (operation == '-')
+	len = sprintf(buffer, "%d\n", num1 - num2);
+    if (operation == '*')
+	len = sprintf(buffer, "%d\n", num1 * num2);
+    if (operation == '/')
+	len = sprintf(buffer, "%d\n", num1 / num2);
+    return len;
+}
+
+static struct kobj_attribute num1_attribute = __ATTR(num1, 0666, NULL, sysfs_file1_store);
+static struct kobj_attribute num2_attribute = __ATTR(num2, 0666, NULL, sysfs_file2_store);
+static struct kobj_attribute operation_attribute = __ATTR(operation, 0666, NULL, sysfs_operation_store);
+static struct kobj_attribute result_attribute = __ATTR(num1, 0666, sysfs_result_show, NULL);
+
+static struct attribute *attrs[] = {
+	&num1_attribute,
+	&num2_attribute,
+	&operation_attribute,
+	&result_attribute,
+	NULL,
+};
+
+static struct attribute_group attr_group = {
+	.attrs = attrs,
+};
+
+static struct kobject *example_kobj;
+
 int init_module()
 {
     proc_file_1 = create_proc_entry("proc_num1", 0666, NULL);
@@ -101,7 +134,16 @@ int init_module()
     proc_file_2->write_proc = proc_file2_write;
     proc_result_file->read_proc = proc_file_result_read;
     proc_operation_file->write_proc = proc_file_operation_write;
-    return 0;
+    //return 0;
+
+    int retval;
+    example_kobj = kobject_create_and_add("calc", kernel_kobj);
+    if (!example_kobj)
+	return -ENOMEM;
+    retval = sysfs_create_group(example_kobj, &attr_group);
+    if (retval)
+	kobject_put(example_kobj);
+    return retval;
 }
 
 void cleanup_module()
@@ -110,5 +152,7 @@ void cleanup_module()
     remove_proc_entry("proc_num2", NULL);
     remove_proc_entry("proc_result", NULL);
     remove_proc_entry("proc_operation", NULL);
+
+    kobject_put(example_kobj);
 }
 
