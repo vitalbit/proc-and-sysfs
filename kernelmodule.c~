@@ -1,9 +1,3 @@
-#undef __KERNEL__
-#define __KERNEL__
-
-#undef MODULE
-#define MODULE
-
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -77,10 +71,20 @@ static ssize_t sysfs_file1_store(struct kobject *kobj, struct kobj_attribute *at
     return count;
 }
 
+static ssize_t sysfs_file1_show(struct kobject *kobj, struct kobj_attribute *attr, char *buffer)
+{
+    return sprintf(buffer, "%d\n", num1);
+}
+
 static ssize_t sysfs_file2_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
     sscanf(buf, "%d", &num2);
     return count;
+}
+
+static ssize_t sysfs_file2_show(struct kobject *kobj, struct kobj_attribute *attr, char *buffer)
+{
+    return sprintf(buffer, "%d\n", num2);
 }
 
 static ssize_t sysfs_operation_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
@@ -89,7 +93,18 @@ static ssize_t sysfs_operation_store(struct kobject *kobj, struct kobj_attribute
     return count;
 }
 
-static ssize_t sysfs_result_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+static ssize_t sysfs_operation_show(struct kobject *kobj, struct kobj_attribute *attr, char *buffer)
+{
+    return sprintf(buffer, "%c\n", operation);
+}
+
+static ssize_t sysfs_result_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+    sscanf(buf, "%d", &result);
+    return count;
+}
+
+static ssize_t sysfs_result_show(struct kobject *kobj, struct kobj_attribute *attr, char *buffer)
 {
     int len;
     if (operation == '+')
@@ -103,10 +118,10 @@ static ssize_t sysfs_result_show(struct kobject *kobj, struct kobj_attribute *at
     return len;
 }
 
-static struct kobj_attribute num1_attribute = __ATTR(num1, 0666, NULL, sysfs_file1_store);
-static struct kobj_attribute num2_attribute = __ATTR(num2, 0666, NULL, sysfs_file2_store);
-static struct kobj_attribute operation_attribute = __ATTR(operation, 0666, NULL, sysfs_operation_store);
-static struct kobj_attribute result_attribute = __ATTR(num1, 0666, sysfs_result_show, NULL);
+static struct kobj_attribute num1_attribute = __ATTR(num1, 0666, sysfs_file1_show, sysfs_file1_store);
+static struct kobj_attribute num2_attribute = __ATTR(num2, 0666, sysfs_file2_show, sysfs_file2_store);
+static struct kobj_attribute operation_attribute = __ATTR(operation, 0666, sysfs_operation_show, sysfs_operation_store);
+static struct kobj_attribute result_attribute = __ATTR(num1, 0666, sysfs_result_show, sysfs_result_store);
 
 static struct attribute *attrs[] = {
 	&num1_attribute,
@@ -122,8 +137,9 @@ static struct attribute_group attr_group = {
 
 static struct kobject *example_kobj;
 
-int init_module()
+static int init_calc(void)
 {
+    int retval;
     proc_file_1 = create_proc_entry("proc_num1", 0666, NULL);
     proc_file_2 = create_proc_entry("proc_num2", 0666, NULL);
     proc_result_file = create_proc_entry("proc_result", 0666, NULL);
@@ -134,19 +150,17 @@ int init_module()
     proc_file_2->write_proc = proc_file2_write;
     proc_result_file->read_proc = proc_file_result_read;
     proc_operation_file->write_proc = proc_file_operation_write;
-    //return 0;
 
-    int retval;
     example_kobj = kobject_create_and_add("calc", kernel_kobj);
     if (!example_kobj)
 	return -ENOMEM;
     retval = sysfs_create_group(example_kobj, &attr_group);
     if (retval)
 	kobject_put(example_kobj);
-    return retval;
+    return 0;
 }
 
-void cleanup_module()
+static void cleanup_calc(void)
 {
     remove_proc_entry("proc_num1", NULL);
     remove_proc_entry("proc_num2", NULL);
@@ -155,4 +169,8 @@ void cleanup_module()
 
     kobject_put(example_kobj);
 }
+
+MODULE_LICENSE("GPL");
+module_init(init_calc);
+module_exit(cleanup_calc);
 
